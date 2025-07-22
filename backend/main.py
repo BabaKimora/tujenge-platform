@@ -94,8 +94,13 @@ async def lifespan(app: FastAPI):
         await db_manager.close()
         
         # Close cache connections
-        from backend.utils.redis_manager import redis_manager
-        await redis_manager.close()
+        try:
+            from backend.utils.redis_manager import redis_manager
+            await redis_manager.close()
+        except ImportError:
+            logger.info("Redis manager not available during shutdown")
+        except Exception as cache_error:
+            logger.warning(f"Cache shutdown error: {cache_error}")
         
         logger.info("\u2705 Tujenge Platform shutdown completed!")
         
@@ -250,18 +255,26 @@ async def health_check():
     
     try:
         # Database health check
-        db_health = await db_manager.health_check()
-        health_status["services"]["database"] = db_health
+        try:
+            db_health = await db_manager.health_check()
+            health_status["services"]["database"] = db_health
+        except Exception as db_error:
+            health_status["services"]["database"] = {"status": "unhealthy", "error": str(db_error)}
         
         # Cache health check
-        from backend.core.cache import cache_manager
-        cache_health = await cache_manager.health_check()
-        health_status["services"]["cache"] = cache_health
+        try:
+            from backend.core.cache import cache_manager
+            cache_health = await cache_manager.health_check()
+            health_status["services"]["cache"] = cache_health
+        except ImportError:
+            health_status["services"]["cache"] = {"status": "unavailable", "message": "Cache module not found"}
+        except Exception as cache_error:
+            health_status["services"]["cache"] = {"status": "unhealthy", "error": str(cache_error)}
         
         # Check if any service is unhealthy
         unhealthy_services = [
             name for name, service in health_status["services"].items()
-            if service.get("status") != "healthy"
+            if service.get("status") not in ["healthy", "unavailable"]
         ]
         
         if unhealthy_services:

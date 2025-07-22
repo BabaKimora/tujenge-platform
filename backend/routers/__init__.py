@@ -5,6 +5,7 @@ Centralized router imports for the FastAPI application
 
 # Import existing routers
 from . import customers
+from . import loans
 
 # Create placeholder routers for missing modules to prevent import errors
 class PlaceholderRouter:
@@ -21,10 +22,6 @@ import types
 # Auth router placeholder
 auth = types.ModuleType('auth')
 auth.router = PlaceholderRouter('auth').router
-
-# Other placeholder routers
-loans = types.ModuleType('loans')
-loans.router = PlaceholderRouter('loans').router
 
 transactions = types.ModuleType('transactions')
 transactions.router = PlaceholderRouter('transactions').router
