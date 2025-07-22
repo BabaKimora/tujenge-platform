@@ -16,29 +16,16 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from backend.core.config import settings
+from backend.config import settings
 from backend.core.database import db_manager, init_database
-from backend.core.security import SecurityManager
+from backend.auth.middleware import AuthenticationMiddleware
 from backend.core.monitoring import setup_logging, log_request_middleware
-from backend.middleware.rate_limiting import RateLimitMiddleware
-from backend.middleware.tenant import TenantMiddleware
-from backend.middleware.security import SecurityMiddleware
 
 # Import all routers
 from backend.routers import (
     auth,
     customers,
-    loans,
-    transactions,
-    mobile_money,
-    government,
-    documents,
-    users,
-    branches,
-    regions,
-    analytics,
-    health,
-    admin
+    loans
 )
 
 # Setup logging for Tanzania fintech operations
@@ -60,19 +47,20 @@ async def lifespan(app: FastAPI):
     logger.info("\U0001F3DB\uFE0F Government APIs: NIDA, TIN Validation")
     
     try:
-        # TODO: Initialize database when PostgreSQL is available
-        # await init_database()
-        logger.info("⚠️ Database initialization skipped (PostgreSQL not available)")
+        # Initialize database when PostgreSQL is available
+        try:
+            await init_database()
+            logger.info("✅ Database initialized successfully")
+        except Exception as e:
+            logger.warning(f"⚠️ Database initialization skipped: {e}")
         
-        # TODO: Initialize security manager when dependencies are available
-        # security_manager = SecurityManager()
-        # await security_manager.initialize()
-        logger.info("⚠️ Security manager initialization skipped")
-        
-        # TODO: Initialize Redis cache when Redis is available
-        # from backend.core.cache import cache_manager
-        # await cache_manager.initialize()
-        logger.info("⚠️ Redis cache initialization skipped")
+        # Initialize Redis cache when Redis is available
+        try:
+            from backend.utils.redis_manager import redis_manager
+            await redis_manager.initialize()
+            logger.info("✅ Redis cache initialized successfully")
+        except Exception as e:
+            logger.warning(f"⚠️ Redis cache initialization skipped: {e}")
         
         # TODO: Setup monitoring when dependencies are available
         # if settings.ENABLE_METRICS:
@@ -144,36 +132,23 @@ app = FastAPI(
 )
 
 # Add middleware (order matters!)
-# 1. Security middleware (first)
-app.add_middleware(SecurityMiddleware)
+# 1. Authentication middleware (first - handles JWT and tenant context)
+app.add_middleware(AuthenticationMiddleware)
 
 # 2. CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=settings.CORS_METHODS,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
 # 3. Compression middleware
-if settings.ENABLE_COMPRESSION:
-    app.add_middleware(
-        GZipMiddleware,
-        minimum_size=1000,
-        compresslevel=settings.COMPRESSION_LEVEL
-    )
-
-# 4. Rate limiting middleware
 app.add_middleware(
-    RateLimitMiddleware,
-    calls=settings.RATE_LIMIT_REQUESTS,
-    period=settings.RATE_LIMIT_WINDOW
+    GZipMiddleware,
+    minimum_size=1000
 )
-
-# 5. Tenant middleware (for multi-tenancy)
-if settings.ENABLE_MULTI_TENANCY:
-    app.add_middleware(TenantMiddleware)
 
 # Add request logging middleware
 app.middleware("http")(log_request_middleware)
@@ -258,51 +233,43 @@ async def health_check():
         try:
             db_health = await db_manager.health_check()
             health_status["services"]["database"] = db_health
-        except Exception as db_error:
-            health_status["services"]["database"] = {"status": "unhealthy", "error": str(db_error)}
+        except Exception as e:
+            health_status["services"]["database"] = {"status": "unhealthy", "error": str(e)}
         
-        # Cache health check
+        # Redis health check
         try:
-            from backend.core.cache import cache_manager
-            cache_health = await cache_manager.health_check()
-            health_status["services"]["cache"] = cache_health
+            from backend.utils.redis_manager import redis_manager
+            try:
+                await redis_manager.ping()
+                health_status["services"]["redis"] = {"status": "healthy"}
+            except Exception as e:
+                health_status["services"]["redis"] = {"status": "unhealthy", "error": str(e)}
         except ImportError:
-            health_status["services"]["cache"] = {"status": "unavailable", "message": "Cache module not found"}
-        except Exception as cache_error:
-            health_status["services"]["cache"] = {"status": "unhealthy", "error": str(cache_error)}
+            health_status["services"]["redis"] = {"status": "not_configured"}
         
         # Check if any service is unhealthy
-        unhealthy_services = [
-            name for name, service in health_status["services"].items()
-            if service.get("status") not in ["healthy", "unavailable"]
-        ]
+        overall_healthy = all(
+            service.get("status") == "healthy" 
+            for service in health_status["services"].values()
+        )
         
-        if unhealthy_services:
+        if not overall_healthy:
             health_status["status"] = "degraded"
-            health_status["unhealthy_services"] = unhealthy_services
+        
+        return health_status
         
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        health_status["status"] = "unhealthy"
-        health_status["error"] = str(e)
-    
-    return health_status
+        logger.error(f"Health check error: {e}")
+        return {
+            "status": "unhealthy",
+            "timestamp": time.time(),
+            "error": str(e)
+        }
 
-
-# Include all API routers with Tanzania-specific prefixes
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
-app.include_router(customers.router, prefix="/api/v1/customers", tags=["Customers"])
-app.include_router(loans.router, prefix="/api/v1/loans", tags=["Loans"])
-app.include_router(transactions.router, prefix="/api/v1/transactions", tags=["Transactions"])
-app.include_router(mobile_money.router, prefix="/api/v1/mobile-money", tags=["Mobile Money"])
-app.include_router(government.router, prefix="/api/v1/government", tags=["Government APIs"])
-app.include_router(documents.router, prefix="/api/v1/documents", tags=["Documents"])
-app.include_router(users.router, prefix="/api/v1/users", tags=["User Management"])
-app.include_router(branches.router, prefix="/api/v1/branches", tags=["Branches"])
-app.include_router(regions.router, prefix="/api/v1/regions", tags=["Tanzania Regions"])
-app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["Analytics"])
-app.include_router(health.router, prefix="/api/v1/health", tags=["System Health"])
-app.include_router(admin.router, prefix="/api/v1/admin", tags=["Administration"])
+# Include routers
+app.include_router(auth.router, prefix="/api/v1", tags=["Authentication"])
+app.include_router(customers.router, prefix="/api/v1", tags=["Customers"])
+app.include_router(loans.router, prefix="/api/v1", tags=["Loans"])
 
 # Mount static files for document serving
 app.mount("/static", StaticFiles(directory="static"), name="static")

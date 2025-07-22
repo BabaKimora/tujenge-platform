@@ -60,6 +60,8 @@ async def init_database():
     """Initialize database tables"""
     # Import all models to ensure they're registered with Base
     from backend.models.customer import Customer
+    from backend.models.user import User
+    from backend.models.tenant import Tenant
     
     # Create all tables
     async with engine.begin() as conn:
