@@ -1,0 +1,79 @@
+# Tujenge Platform - Tanzania Fintech Platform Dependencies
+
+# Core Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database & ORM
+sqlalchemy==2.0.23
+alembic==1.12.1
+psycopg2-binary==2.9.7
+asyncpg==0.29.0
+
+# Redis for caching and sessions
+redis==5.0.1
+aioredis==2.0.1
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+PyJWT==2.8.0
+passlib[bcrypt]==1.7.4
+cryptography==41.0.7
+
+# HTTP Clients for API integrations
+httpx==0.25.2
+aiohttp==3.9.1
+requests==2.31.0
+
+# Data Validation & Serialization
+pydantic==2.5.0
+pydantic-settings==2.1.0
+email-validator==2.1.0
+
+# Tanzania Mobile Money & Government APIs
+mpesa-python-sdk==1.0.0
+# Note: Airtel Money integration requires custom implementation
+
+# Background Tasks & Job Processing
+celery==5.3.4
+flower==2.0.1
+
+# Monitoring, Logging & Observability
+structlog==23.2.0
+sentry-sdk[fastapi]==1.38.0
+prometheus-client==0.19.0
+prometheus-fastapi-instrumentator==7.0.0
+
+# File Processing & Document Handling
+python-docx==1.1.0
+pypdf2==3.0.1
+pillow==10.0.1
+
+# Date/Time handling
+python-dateutil==2.8.2
+pytz==2023.3
+
+# Environment & Configuration
+python-dotenv==1.0.0
+pyyaml==6.0.1
+
+# Utilities
+phonenumbers==8.13.25
+python-slugify==8.0.1
+typing-extensions==4.8.0
+
+# API Rate Limiting & Documentation
+fastapi-users==12.1.2
+fastapi-limiter==0.1.5
+
+# Development Dependencies (install with: pip install -r requirements-dev.txt)
+# pytest==7.4.3
+# pytest-asyncio==0.21.1
+# pytest-cov==4.1.0
+# faker==20.1.0
+# black==23.11.0
+# isort==5.12.0
+# flake8==6.1.0
+# mypy==1.7.1
+# pre-commit==3.6.0
